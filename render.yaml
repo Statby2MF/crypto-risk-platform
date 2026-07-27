@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: crypto-risk-platform
+    runtime: python
+    repo: https://github.com/ton-username/crypto_risk_platform
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run dashboard/app.py --server.port 10000
+    healthCheckPath: /
+    autoDeploy: true
