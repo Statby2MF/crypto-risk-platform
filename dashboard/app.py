@@ -7,17 +7,16 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import yfinance as yf
+import requests
 from datetime import datetime, timedelta
 import time
-# Configuration pour Render
-import os
-PORT = os.environ.get('PORT', 8501)
+import numpy as np
+
 # Importer nos modules
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.collector import get_price_yahoo
 from src.indicators import calculate_all_indicators
 from src.risk_models import RiskModels
 from src.alert_system import AlertSystem
@@ -52,12 +51,9 @@ COLORS = {
 
 st.markdown(f"""
 <style>
-    /* Fond global */
     .stApp {{
         background-color: {COLORS['dark']};
     }}
-    
-    /* Cartes métriques */
     .metric-card {{
         background: {COLORS['card']};
         border-radius: 12px;
@@ -65,30 +61,18 @@ st.markdown(f"""
         border: 1px solid #3D3D5C;
         margin: 5px 0;
     }}
-    
     .metric-card:hover {{
         border-color: {COLORS['primary']};
         transition: 0.3s;
     }}
-    
-    /* Titres */
     h1, h2, h3 {{
         color: {COLORS['text']} !important;
     }}
-    
-    /* Sidebar */
-    .css-1d391kg {{
-        background-color: {COLORS['card']};
-    }}
-    
-    /* Métriques Streamlit */
     .stMetric {{
         background: {COLORS['card']};
         border-radius: 10px;
         padding: 10px;
     }}
-    
-    /* Footer */
     .footer {{
         text-align: center;
         color: {COLORS['text_secondary']};
@@ -107,33 +91,93 @@ st.markdown(f"""
 risk_models = RiskModels()
 alert_system = AlertSystem()
 
-# Liste des cryptomonnaies disponibles
-CRYPTOS = {
-    "Bitcoin (BTC)": "BTC-USD",
-    "Ethereum (ETH)": "ETH-USD",
-    "Solana (SOL)": "SOL-USD",
-    "Ripple (XRP)": "XRP-USD",
-    "Cardano (ADA)": "ADA-USD"
+# Mapping des cryptos
+CRYPTO_MAP = {
+    "Bitcoin (BTC)": {"symbol": "BTC", "binance": "BTCUSDT", "coingecko": "bitcoin"},
+    "Ethereum (ETH)": {"symbol": "ETH", "binance": "ETHUSDT", "coingecko": "ethereum"},
+    "Solana (SOL)": {"symbol": "SOL", "binance": "SOLUSDT", "coingecko": "solana"},
+    "Ripple (XRP)": {"symbol": "XRP", "binance": "XRPUSDT", "coingecko": "ripple"},
+    "Cardano (ADA)": {"symbol": "ADA", "binance": "ADAUSDT", "coingecko": "cardano"}
 }
+
+# ============================================
+# FONCTIONS DE COLLECTE DE DONNÉES
+# ============================================
+
+def get_price_binance(symbol):
+    """
+    Récupère le prix depuis Binance
+    """
+    try:
+        url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        return float(data['price'])
+    except Exception as e:
+        print(f"❌ Binance error: {e}")
+        return None
+
+def get_price_coingecko(coin_id):
+    """
+    Récupère le prix depuis CoinGecko
+    """
+    try:
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        return float(data[coin_id]['usd'])
+    except Exception as e:
+        print(f"❌ CoinGecko error: {e}")
+        return None
+
+def get_price_with_fallback(crypto_key):
+    """
+    Récupère le prix avec fallback: Binance → CoinGecko
+    """
+    crypto_info = CRYPTO_MAP.get(crypto_key)
+    if not crypto_info:
+        return None
+    
+    # 1. Essayer Binance
+    price = get_price_binance(crypto_info["binance"])
+    if price:
+        return price
+    
+    # 2. Fallback sur CoinGecko
+    price = get_price_coingecko(crypto_info["coingecko"])
+    if price:
+        return price
+    
+    return None
+
+def get_historical_data(symbol, period="3mo"):
+    """
+    Récupère les données historiques depuis Yahoo Finance
+    """
+    try:
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period=period)
+        return hist
+    except Exception as e:
+        print(f"❌ Yahoo error: {e}")
+        return pd.DataFrame()
 
 # ============================================
 # SIDEBAR - CONFIGURATION
 # ============================================
 
 with st.sidebar:
-    st.image("https://cryptologos.cc/logos/bitcoin-btc-logo.png", width=50)
     st.markdown(f"<h2 style='color: {COLORS['primary']};'>⚙️ Configuration</h2>", unsafe_allow_html=True)
-    
     st.markdown("---")
     
     # Sélection de la crypto
-    crypto_name = st.selectbox(
+    crypto_key = st.selectbox(
         "📈 Cryptomonnaie",
-        list(CRYPTOS.keys()),
+        list(CRYPTO_MAP.keys()),
         index=0
     )
-    symbol = CRYPTOS[crypto_name]
-    crypto_short = crypto_name.split(" ")[0].upper()
+    crypto_info = CRYPTO_MAP[crypto_key]
+    crypto_short = crypto_info["symbol"]
     
     # Période d'analyse
     period = st.selectbox(
@@ -144,19 +188,17 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Bouton d'actualisation
     if st.button("🔄 Actualiser", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     
     st.markdown("---")
     
-    # Informations
     st.markdown(f"""
     <div style='background: {COLORS['card']}; padding: 15px; border-radius: 10px;'>
         <p style='color: {COLORS['text_secondary']}; font-size: 12px;'>
             📊 <b>Données en temps réel</b><br>
-            • Source: Yahoo Finance<br>
+            • Source: Binance / CoinGecko<br>
             • Mise à jour: À la demande
         </p>
     </div>
@@ -173,28 +215,30 @@ with st.sidebar:
 # CHARGEMENT DES DONNÉES
 # ============================================
 
-@st.cache_data(ttl=300)
-def load_data(symbol, period):
-    """Charge les données depuis Yahoo Finance"""
-    ticker = yf.Ticker(symbol)
-    hist = ticker.history(period=period)
-    return hist
+# Prix actuel
+current_price = get_price_with_fallback(crypto_key)
 
-def get_current_price(symbol):
-    """Récupère le prix actuel"""
-    return get_price_yahoo(symbol)
-
-# Charger les données
-hist = load_data(symbol, period)
-
-if hist.empty:
-    st.error("❌ Impossible de charger les données")
+if current_price is None:
+    st.error(f"❌ Impossible de récupérer le prix pour {crypto_key}")
     st.stop()
 
-# Prix actuel
-current_price = get_current_price(symbol)
-if current_price is None:
-    current_price = hist['Close'].iloc[-1]
+# Données historiques (pour les indicateurs)
+hist = get_historical_data(crypto_info["symbol"], period)
+
+if hist.empty:
+    st.warning("⚠️ Données historiques limitées, utilisation de données simulées")
+    # Créer des données simulées si Yahoo ne fonctionne pas
+    dates = pd.date_range(end=datetime.now(), periods=100, freq='D')
+    base_price = current_price
+    prices = [base_price * (1 + np.random.randn() * 0.02) for _ in range(100)]
+    prices = np.cumsum(prices) / 100 * base_price / 10 + base_price * 0.9
+    hist = pd.DataFrame({
+        'Close': prices,
+        'Open': prices,
+        'High': prices * 1.01,
+        'Low': prices * 0.99
+    }, index=dates)
+    hist = hist.iloc[-50:]
 
 prices = hist['Close'].tolist()
 dates = hist.index.tolist()
@@ -232,14 +276,14 @@ with col1:
     <div class='metric-card'>
         <p style='color: {COLORS['text_secondary']}; font-size: 14px;'>💰 {crypto_short}</p>
         <p style='color: {COLORS['text']}; font-size: 28px; font-weight: bold;'>${current_price:,.2f}</p>
-        <p style='color: {'green' if hist['Close'].iloc[-1] > hist['Close'].iloc[-2] else 'red'};'>
-            {((current_price - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100):.2f}%
+        <p style='color: {COLORS['text_secondary']}; font-size: 12px;'>
+            {datetime.now().strftime('%H:%M:%S')}
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 with col2:
-    rsi = indicators['rsi']
+    rsi = indicators.get('rsi', 50)
     rsi_color = "green" if rsi < 30 else "red" if rsi > 70 else "orange"
     st.markdown(f"""
     <div class='metric-card'>
@@ -253,13 +297,12 @@ with col2:
 
 with col3:
     action = action_result['action']
-    emoji = "🟢" if "ACHETER" in action else "🔴" if "VENDRE" in action else "⚪"
     color = COLORS['success'] if "ACHETER" in action else COLORS['danger'] if "VENDRE" in action else COLORS['warning']
     st.markdown(f"""
     <div class='metric-card'>
         <p style='color: {COLORS['text_secondary']}; font-size: 14px;'>🎯 Signal</p>
         <p style='color: {color}; font-size: 22px; font-weight: bold;'>{action}</p>
-        <p style='color: {COLORS['text_secondary']}; font-size: 12px;'>Score: {action_result['score']}</p>
+        <p style='color: {COLORS['text_secondary']}; font-size: 12px;'>Score: {action_result.get('score', 0)}</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -359,9 +402,9 @@ with col1:
     # RSI
     st.markdown(f"""
     <div style='background: {COLORS['card']}; padding: 15px; border-radius: 10px; margin: 5px 0;'>
-        <p style='color: {COLORS['text_secondary']};'>RSI: <b style='color: {COLORS['text']};'>{indicators['rsi']:.1f}</b></p>
+        <p style='color: {COLORS['text_secondary']};'>RSI: <b style='color: {COLORS['text']};'>{indicators.get('rsi', 'N/A')}</b></p>
         <div style='background: #3D3D5C; height: 6px; border-radius: 3px;'>
-            <div style='background: {COLORS['primary']}; width: {min(indicators['rsi'], 100)}%; height: 6px; border-radius: 3px;'></div>
+            <div style='background: {COLORS['primary']}; width: {min(indicators.get('rsi', 50), 100)}%; height: 6px; border-radius: 3px;'></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -397,7 +440,6 @@ with col2:
     st.subheader("⚠️ Analyse des Risques Extrêmes")
     
     if risk_result:
-        # VaR et ES dans une grille
         risk_col1, risk_col2 = st.columns(2)
         
         with risk_col1:
@@ -457,9 +499,9 @@ st.subheader("🔍 Détails de l'Analyse")
 with st.expander("📋 Afficher les détails du signal"):
     st.markdown(f"""
     <div style='background: {COLORS['card']}; padding: 15px; border-radius: 10px;'>
-        <p style='color: {COLORS['text']};'><b>Action:</b> {action_result['action']}</p>
-        <p style='color: {COLORS['text']};'><b>Score:</b> {action_result['score']}</p>
-        <p style='color: {COLORS['text']};'><b>Confiance:</b> {action_result['confidence']}</p>
+        <p style='color: {COLORS['text']};'><b>Action:</b> {action_result.get('action', 'N/A')}</p>
+        <p style='color: {COLORS['text']};'><b>Score:</b> {action_result.get('score', 0)}</p>
+        <p style='color: {COLORS['text']};'><b>Confiance:</b> {action_result.get('confidence', 'N/A')}</p>
         <p style='color: {COLORS['text_secondary']};'><b>Raisons:</b></p>
     """, unsafe_allow_html=True)
     
@@ -477,7 +519,7 @@ with st.expander("📊 Tableau des indicateurs"):
         "Indicateur": ["Prix", "RSI", "MACD", "Signal MACD", "MA20", "MA50", "VaR 95%", "VaR 99%", "ES 95%", "ES 99%", "Hill ξ", "Volatilité"],
         "Valeur": [
             f"${current_price:,.2f}",
-            f"{indicators['rsi']:.1f}",
+            f"{indicators.get('rsi', 'N/A')}",
             f"{macd.get('macd', 0):.4f}",
             f"{macd.get('signal', 0):.4f}",
             f"${ma.get('ma20', 0):,.2f}",
@@ -501,7 +543,8 @@ st.markdown("---")
 st.markdown(f"""
 <div class='footer'>
     🔍 Dernière mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-    | Données: Yahoo Finance
+    | Données: Binance / CoinGecko / Yahoo
     | ⚠️ Ceci n'est pas un conseil financier
 </div>
 """, unsafe_allow_html=True)
+"Fix data loading with Binance"
