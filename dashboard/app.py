@@ -296,7 +296,7 @@ with col2:
     """, unsafe_allow_html=True)
 
 with col3:
-    action = action_result['action']
+    action = action_result.get('action', 'N/A')
     color = COLORS['success'] if "ACHETER" in action else COLORS['danger'] if "VENDRE" in action else COLORS['warning']
     st.markdown(f"""
     <div class='metric-card'>
@@ -307,28 +307,37 @@ with col3:
     """, unsafe_allow_html=True)
 
 with col4:
-    var_99 = risk_result.get('var_99') if risk_result else None
-    var_color = COLORS['danger'] if risk_result and risk_result.get('var_99_alerte', False) else COLORS['success']
-    var_text = f"{var_99}%" if var_99 is not None else "N/A"
+    if risk_result:
+        var_99 = risk_result.get('var_99')
+        var_color = COLORS['danger'] if risk_result.get('var_99_alerte', False) else COLORS['success']
+        var_text = f"{var_99}%" if var_99 is not None else "N/A"
+    else:
+        var_color = COLORS['warning']
+        var_text = "N/A"
     st.markdown(f"""
     <div class='metric-card'>
         <p style='color: {COLORS['text_secondary']}; font-size: 14px;'>⚠️ VaR 99%</p>
         <p style='color: {var_color}; font-size: 24px; font-weight: bold;'>{var_text}</p>
         <p style='color: {COLORS['text_secondary']}; font-size: 12px;'>
-            {'🔴 Risque élevé' if risk_result and risk_result.get('var_99_alerte', False) else '✅ Risque maîtrisé'}
+            {'🔴 Risque élevé' if risk_result and risk_result.get('var_99_alerte', False) else '✅ Risque maîtrisé' if risk_result else '⏳ Calcul...'}
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 with col5:
-    vol = risk_result.get('vol_actuelle') if risk_result else None
-    vol_text = f"{vol}%" if vol is not None else "N/A"
+    if risk_result:
+        vol = risk_result.get('vol_actuelle')
+        vol_text = f"{vol}%" if vol is not None else "N/A"
+        vol_theorique = risk_result.get('vol_theorique', 'N/A')
+    else:
+        vol_text = "N/A"
+        vol_theorique = "N/A"
     st.markdown(f"""
     <div class='metric-card'>
         <p style='color: {COLORS['text_secondary']}; font-size: 14px;'>🌊 Volatilité</p>
         <p style='color: {COLORS['text']}; font-size: 24px; font-weight: bold;'>{vol_text}</p>
         <p style='color: {COLORS['text_secondary']}; font-size: 12px;'>
-            Théorique: {risk_result.get('vol_theorique', 'N/A')}%
+            Théorique: {vol_theorique}%
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -487,7 +496,7 @@ with col2:
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.warning("Pas assez de données pour l'analyse des risques")
+        st.info("⏳ Analyse des risques en cours...")
 
 # ============================================
 # DÉTAILS DE L'ANALYSE
@@ -524,12 +533,12 @@ with st.expander("📊 Tableau des indicateurs"):
             f"{macd.get('signal', 0):.4f}",
             f"${ma.get('ma20', 0):,.2f}",
             f"${ma.get('ma50', 0):,.2f}",
-            f"{risk_result.get('var_95', 'N/A')}%" if risk_result else "N/A",
-            f"{risk_result.get('var_99', 'N/A')}%" if risk_result else "N/A",
-            f"{risk_result.get('es_95', 'N/A')}%" if risk_result else "N/A",
-            f"{risk_result.get('es_99', 'N/A')}%" if risk_result else "N/A",
+            f"{risk_result.get('var_95', 'N/A') if risk_result else 'N/A'}%",
+            f"{risk_result.get('var_99', 'N/A') if risk_result else 'N/A'}%",
+            f"{risk_result.get('es_95', 'N/A') if risk_result else 'N/A'}%",
+            f"{risk_result.get('es_99', 'N/A') if risk_result else 'N/A'}%",
             f"{hill:.3f}" if hill is not None else "N/A",
-            f"{risk_result.get('vol_actuelle', 'N/A')}%" if risk_result else "N/A"
+            f"{risk_result.get('vol_actuelle', 'N/A') if risk_result else 'N/A'}%"
         ]
     }
     df = pd.DataFrame(data)
@@ -547,4 +556,4 @@ st.markdown(f"""
     | ⚠️ Ceci n'est pas un conseil financier
 </div>
 """, unsafe_allow_html=True)
-"Fix data loading with Binance"
+"Fix NoneType error and improve risk display"
