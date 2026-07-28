@@ -70,6 +70,33 @@ def collect_all():
     
     return results
 
+def get_historical_binance(symbol, interval="1d", limit=100):
+    """
+    Récupère l'historique des prix depuis Binance
+    
+    Args:
+        symbol: Symbole Binance (ex: "BTCUSDT")
+        interval: Intervalle de temps ("1d", "1h", "1m")
+        limit: Nombre de bougies à récupérer
+    
+    Returns:
+        list: Liste des prix de clôture
+    """
+    try:
+        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        
+        prices = []
+        for candle in data:
+            prices.append(float(candle[4]))  # Prix de clôture
+        
+        print(f"✅ {len(prices)} données historiques récupérées depuis Binance pour {symbol}")
+        return prices
+    except Exception as e:
+        print(f"❌ Erreur Binance historique: {e}")
+        return None
+
 if __name__ == "__main__":
     print("🔍 Test de collecte...")
     print("-" * 40)
@@ -78,3 +105,5 @@ if __name__ == "__main__":
     print("\n📈 Résultat:")
     for crypto, info in data.items():
         print(f"   {crypto}: ${info['price']:,.2f}")
+
+"Ajout get_historical_binance"
