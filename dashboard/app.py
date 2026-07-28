@@ -200,38 +200,54 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 # ============================================
-# CHARGEMENT DES DONNÉES
+# CHARGEMENT DES DONNÉES (version rapide)
 # ============================================
 
+# Prix actuel
 current_price = get_price_with_fallback(crypto_key)
 
 if current_price is None:
     st.error(f"❌ Impossible de récupérer le prix pour {crypto_key}")
     st.stop()
 
-hist = get_historical_data(crypto_info["symbol"], period)
-
-if hist.empty:
-    st.warning("⚠️ Données historiques limitées, utilisation de données simulées")
-    dates = pd.date_range(end=datetime.now(), periods=100, freq='D')
-    base_price = current_price
-    prices = [base_price * (1 + np.random.randn() * 0.02) for _ in range(100)]
-    prices = np.cumsum(prices) / 100 * base_price / 10 + base_price * 0.9
-    hist = pd.DataFrame({
-        'Close': prices,
-        'Open': prices,
-        'High': prices * 1.01,
-        'Low': prices * 0.99
-    }, index=dates)
-    hist = hist.iloc[-50:]
+# Données historiques depuis Binance (rapide)
+try:
+    from src.collector import get_historical_binance
+    hist_prices = get_historical_binance(crypto_info["binance"], limit=100)
+    
+    if hist_prices and len(hist_prices) > 20:
+        # Créer un DataFrame avec les prix Binance
+        dates = pd.date_range(end=datetime.now(), periods=len(hist_prices), freq='D')
+        hist = pd.DataFrame({
+            'Close': hist_prices,
+            'Open': hist_prices,
+            'High': hist_prices,
+            'Low': hist_prices
+        }, index=dates)
+        st.success("✅ Données historiques chargées depuis Binance")
+    else:
+        raise Exception("Pas assez de données Binance")
+        
+except Exception as e:
+    # Fallback sur Yahoo
+    st.info("📊 Utilisation de Yahoo Finance pour l'historique")
+    hist = get_historical_data(crypto_info["symbol"], period)
+    
+    if hist.empty:
+        st.warning("⚠️ Données historiques limitées, utilisation de données simulées")
+        dates = pd.date_range(end=datetime.now(), periods=50, freq='D')
+        base_price = current_price
+        prices = [base_price * (1 + np.random.randn() * 0.015) for _ in range(50)]
+        prices = np.cumsum(prices) / 50 * base_price / 5 + base_price * 0.95
+        hist = pd.DataFrame({
+            'Close': prices,
+            'Open': prices,
+            'High': prices * 1.01,
+            'Low': prices * 0.99
+        }, index=dates)
 
 prices = hist['Close'].tolist()
 dates = hist.index.tolist()
-
-indicators = calculate_all_indicators(prices)
-risk_result = risk_models.analyze_risk(crypto_short, prices)
-
-action_result = alert_system.determine_action(indicators, risk_result)
 
 # ============================================
 # EN-TÊTE
@@ -534,4 +550,4 @@ st.markdown(f"""
     | ⚠️ Ceci n'est pas un conseil financier
 </div>
 """, unsafe_allow_html=True)
-"Final fix: hill variable error"
+"Amélioration chargement des données"
