@@ -105,9 +105,7 @@ CRYPTO_MAP = {
 # ============================================
 
 def get_price_binance(symbol):
-    """
-    Récupère le prix depuis Binance
-    """
+    """Récupère le prix depuis Binance"""
     try:
         url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
         response = requests.get(url, timeout=10)
@@ -118,9 +116,7 @@ def get_price_binance(symbol):
         return None
 
 def get_price_coingecko(coin_id):
-    """
-    Récupère le prix depuis CoinGecko
-    """
+    """Récupère le prix depuis CoinGecko"""
     try:
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd"
         response = requests.get(url, timeout=10)
@@ -131,19 +127,15 @@ def get_price_coingecko(coin_id):
         return None
 
 def get_price_with_fallback(crypto_key):
-    """
-    Récupère le prix avec fallback: Binance → CoinGecko
-    """
+    """Récupère le prix avec fallback: Binance → CoinGecko"""
     crypto_info = CRYPTO_MAP.get(crypto_key)
     if not crypto_info:
         return None
     
-    # 1. Essayer Binance
     price = get_price_binance(crypto_info["binance"])
     if price:
         return price
     
-    # 2. Fallback sur CoinGecko
     price = get_price_coingecko(crypto_info["coingecko"])
     if price:
         return price
@@ -151,9 +143,7 @@ def get_price_with_fallback(crypto_key):
     return None
 
 def get_historical_data(symbol, period="3mo"):
-    """
-    Récupère les données historiques depuis Yahoo Finance
-    """
+    """Récupère les données historiques depuis Yahoo Finance"""
     try:
         ticker = yf.Ticker(symbol)
         hist = ticker.history(period=period)
@@ -170,7 +160,6 @@ with st.sidebar:
     st.markdown(f"<h2 style='color: {COLORS['primary']};'>⚙️ Configuration</h2>", unsafe_allow_html=True)
     st.markdown("---")
     
-    # Sélection de la crypto
     crypto_key = st.selectbox(
         "📈 Cryptomonnaie",
         list(CRYPTO_MAP.keys()),
@@ -179,7 +168,6 @@ with st.sidebar:
     crypto_info = CRYPTO_MAP[crypto_key]
     crypto_short = crypto_info["symbol"]
     
-    # Période d'analyse
     period = st.selectbox(
         "📅 Période d'historique",
         ["1mo", "3mo", "6mo", "1y", "2y"],
@@ -215,19 +203,16 @@ with st.sidebar:
 # CHARGEMENT DES DONNÉES
 # ============================================
 
-# Prix actuel
 current_price = get_price_with_fallback(crypto_key)
 
 if current_price is None:
     st.error(f"❌ Impossible de récupérer le prix pour {crypto_key}")
     st.stop()
 
-# Données historiques (pour les indicateurs)
 hist = get_historical_data(crypto_info["symbol"], period)
 
 if hist.empty:
     st.warning("⚠️ Données historiques limitées, utilisation de données simulées")
-    # Créer des données simulées si Yahoo ne fonctionne pas
     dates = pd.date_range(end=datetime.now(), periods=100, freq='D')
     base_price = current_price
     prices = [base_price * (1 + np.random.randn() * 0.02) for _ in range(100)]
@@ -243,11 +228,9 @@ if hist.empty:
 prices = hist['Close'].tolist()
 dates = hist.index.tolist()
 
-# Calculer les indicateurs
 indicators = calculate_all_indicators(prices)
 risk_result = risk_models.analyze_risk(crypto_short, prices)
 
-# Déterminer l'action
 action_result = alert_system.determine_action(indicators, risk_result)
 
 # ============================================
@@ -351,7 +334,6 @@ st.subheader("📈 Évolution des Prix")
 
 fig = go.Figure()
 
-# Prix
 fig.add_trace(go.Scatter(
     x=dates,
     y=prices,
@@ -362,7 +344,6 @@ fig.add_trace(go.Scatter(
     fillcolor='rgba(108, 99, 255, 0.1)'
 ))
 
-# Bandes de Bollinger
 if indicators.get('bollinger'):
     bollinger = indicators['bollinger']
     fig.add_trace(go.Scatter(
@@ -408,7 +389,6 @@ with col1:
     st.markdown("---")
     st.subheader("📊 Indicateurs Techniques")
     
-    # RSI
     st.markdown(f"""
     <div style='background: {COLORS['card']}; padding: 15px; border-radius: 10px; margin: 5px 0;'>
         <p style='color: {COLORS['text_secondary']};'>RSI: <b style='color: {COLORS['text']};'>{indicators.get('rsi', 'N/A')}</b></p>
@@ -418,7 +398,6 @@ with col1:
     </div>
     """, unsafe_allow_html=True)
     
-    # MACD
     macd = indicators.get('macd', {})
     st.markdown(f"""
     <div style='background: {COLORS['card']}; padding: 15px; border-radius: 10px; margin: 5px 0;'>
@@ -430,7 +409,6 @@ with col1:
     </div>
     """, unsafe_allow_html=True)
     
-    # Moyennes mobiles
     ma = indicators.get('moving_averages', {})
     st.markdown(f"""
     <div style='background: {COLORS['card']}; padding: 15px; border-radius: 10px; margin: 5px 0;'>
@@ -482,7 +460,6 @@ with col2:
             </div>
             """, unsafe_allow_html=True)
         
-        # Hill
         hill = risk_result.get('hill_xi')
         hill_text = f"{hill:.3f}" if hill is not None else "N/A"
         hill_color = COLORS['warning'] if hill is not None and hill > 0 else COLORS['success']
@@ -520,10 +497,11 @@ with st.expander("📋 Afficher les détails du signal"):
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ============================================
-# TABLEAU DES INDICATEURS
+# TABLEAU DES INDICATEURS - CORRIGÉ
 # ============================================
 
 with st.expander("📊 Tableau des indicateurs"):
+    hill_value = risk_result.get('hill_xi') if risk_result else None
     data = {
         "Indicateur": ["Prix", "RSI", "MACD", "Signal MACD", "MA20", "MA50", "VaR 95%", "VaR 99%", "ES 95%", "ES 99%", "Hill ξ", "Volatilité"],
         "Valeur": [
@@ -537,7 +515,7 @@ with st.expander("📊 Tableau des indicateurs"):
             f"{risk_result.get('var_99', 'N/A') if risk_result else 'N/A'}%",
             f"{risk_result.get('es_95', 'N/A') if risk_result else 'N/A'}%",
             f"{risk_result.get('es_99', 'N/A') if risk_result else 'N/A'}%",
-            f"{hill:.3f}" if hill is not None else "N/A",
+            f"{hill_value:.3f}" if hill_value is not None else "N/A",
             f"{risk_result.get('vol_actuelle', 'N/A') if risk_result else 'N/A'}%"
         ]
     }
@@ -556,4 +534,4 @@ st.markdown(f"""
     | ⚠️ Ceci n'est pas un conseil financier
 </div>
 """, unsafe_allow_html=True)
-"Fix NoneType error and improve risk display"
+"Final fix: hill variable error"
