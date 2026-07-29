@@ -215,96 +215,6 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     
     st.markdown("---")
-    
-    # ============================================
-    # COMPTE DE TRADING DÉMO
-    # ============================================
-    
-    st.markdown("---")
-    st.markdown("<h3 style='color: #00D2FF;'>💰 Compte Démo</h3>", unsafe_allow_html=True)
-    
-    # Prix actuels pour le portefeuille
-    current_prices = {crypto_short: current_price}   # ← ACCOLADES {}
-    
-    # Résumé du compte
-    summary = paper_trader.get_summary(current_prices)
-    
-    # Afficher le solde
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric(
-            label="💰 Solde",
-            value=f"${paper_trader.balance:,.2f}"
-        )
-    with col2:
-        profit_color = "green" if summary['profit'] > 0 else "red"
-        st.metric(
-            label="📈 P&L",
-            value=f"${summary['profit']:,.2f}",
-            delta=f"{summary['profit_pct']:.1f}%"
-        )
-    
-    # Positions
-    if summary['positions']:
-        st.markdown("**📊 Positions:**")
-        for pos in summary['positions']:
-            st.text(f"{pos['crypto']}: {pos['quantity']:.4f} (${pos['value']:,.2f})")
-    
-    # Boutons d'action
-    st.markdown("---")
-    st.markdown("**📈 Actions:**")
-    
-    # Achat
-    amount = st.number_input(
-        "💰 Montant ($)",
-        min_value=10,
-        max_value=100000,
-        value=100,
-        step=50,
-        key="trade_amount"
-    )
-    
-    trade_crypto = st.selectbox(
-        "📊 Crypto",
-        ["BTC", "ETH", "SOL", "XRP", "ADA"],
-        key="trade_crypto"
-    )
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("🟢 Acheter", use_container_width=True):
-            # Prix pour la crypto sélectionnée
-            crypto_price = current_price if trade_crypto == crypto_short else current_price * 0.95
-            if paper_trader.buy(trade_crypto, crypto_price, amount=amount):
-                st.success(f"✅ Achat {trade_crypto} effectué !")
-                st.rerun()
-            else:
-                st.error("❌ Achat échoué (fonds insuffisants)")
-    
-    with col2:
-        if st.button("🔴 Vendre", use_container_width=True):
-            crypto_price = current_price if trade_crypto == crypto_short else current_price * 0.95
-            if paper_trader.sell(trade_crypto, crypto_price):
-                st.success(f"✅ Vente {trade_crypto} effectuée !")
-                st.rerun()
-            else:
-                st.error("❌ Vente échouée (pas de position)")
-    
-    with col3:
-        if st.button("🔄 Reset", use_container_width=True):
-            paper_trader.reset()
-            st.success("✅ Compte réinitialisé")
-            st.rerun()
-    
-    # Historique des trades
-    if summary['trades']:
-        with st.expander("📋 Historique des trades"):
-            for trade in summary['trades'][-5:]:
-                emoji = "🟢" if trade['type'] == 'BUY' else "🔴"
-                profit_text = f" ({trade.get('profit_pct', 0):.1f}%)" if trade['type'] == 'SELL' else ""
-                st.text(f"{emoji} {trade['type']} {trade['crypto']} {trade['quantity']:.4f} @ ${trade['price']:,.2f}{profit_text}")
-    
-    st.markdown("---")
     st.markdown("""
     <p style='color: #666; font-size: 11px; text-align: center;'>
         ⚠️ Ceci n'est pas un conseil financier
@@ -312,7 +222,7 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
 # ============================================
-# CHARGEMENT DES DONNÉES - AVANT LES MÉTRIQUES
+# CHARGEMENT DES DONNÉES
 # ============================================
 
 # Prix actuel
@@ -359,12 +269,101 @@ prices = hist['Close'].tolist()
 dates = hist.index.tolist()
 
 # ============================================
-# CALCUL DES INDICATEURS - APRÈS CHARGEMENT
+# CALCUL DES INDICATEURS
 # ============================================
 
 indicators = calculate_all_indicators(prices)
 risk_result = risk_models.analyze_risk(crypto_short, prices)
 action_result = alert_system.determine_action(indicators, risk_result)
+
+# ============================================
+# SIDEBAR - COMPTE DE TRADING DÉMO (après chargement)
+# ============================================
+
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("<h3 style='color: #00D2FF;'>💰 Compte Démo</h3>", unsafe_allow_html=True)
+    
+    # Prix actuels pour le portefeuille
+    current_prices = {crypto_short: current_price}
+    
+    # Résumé du compte
+    summary = paper_trader.get_summary(current_prices)
+    
+    # Afficher le solde
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        st.metric(
+            label="💰 Solde",
+            value=f"${paper_trader.balance:,.2f}"
+        )
+    with col2:
+        profit_color = "green" if summary['profit'] > 0 else "red"
+        st.metric(
+            label="📈 P&L",
+            value=f"${summary['profit']:,.2f}",
+            delta=f"{summary['profit_pct']:.1f}%"
+        )
+    
+    # Positions
+    if summary['positions']:
+        st.sidebar.markdown("**📊 Positions:**")
+        for pos in summary['positions']:
+            st.sidebar.text(f"{pos['crypto']}: {pos['quantity']:.4f} (${pos['value']:,.2f})")
+    
+    # Boutons d'action
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**📈 Actions:**")
+    
+    # Achat
+    amount = st.sidebar.number_input(
+        "💰 Montant ($)",
+        min_value=10,
+        max_value=100000,
+        value=100,
+        step=50,
+        key="trade_amount"
+    )
+    
+    trade_crypto = st.sidebar.selectbox(
+        "📊 Crypto",
+        ["BTC", "ETH", "SOL", "XRP", "ADA"],
+        key="trade_crypto"
+    )
+    
+    col1, col2, col3 = st.sidebar.columns(3)
+    with col1:
+        if st.button("🟢 Acheter", use_container_width=True):
+            # Prix pour la crypto sélectionnée
+            crypto_price = current_price if trade_crypto == crypto_short else current_price * 0.95
+            if paper_trader.buy(trade_crypto, crypto_price, amount=amount):
+                st.success(f"✅ Achat {trade_crypto} effectué !")
+                st.rerun()
+            else:
+                st.error("❌ Achat échoué (fonds insuffisants)")
+    
+    with col2:
+        if st.button("🔴 Vendre", use_container_width=True):
+            crypto_price = current_price if trade_crypto == crypto_short else current_price * 0.95
+            if paper_trader.sell(trade_crypto, crypto_price):
+                st.success(f"✅ Vente {trade_crypto} effectuée !")
+                st.rerun()
+            else:
+                st.error("❌ Vente échouée (pas de position)")
+    
+    with col3:
+        if st.button("🔄 Reset", use_container_width=True):
+            paper_trader.reset()
+            st.success("✅ Compte réinitialisé")
+            st.rerun()
+    
+    # Historique des trades
+    if summary['trades']:
+        with st.sidebar.expander("📋 Historique des trades"):
+            for trade in summary['trades'][-5:]:
+                emoji = "🟢" if trade['type'] == 'BUY' else "🔴"
+                profit_text = f" ({trade.get('profit_pct', 0):.1f}%)" if trade['type'] == 'SELL' else ""
+                st.sidebar.text(f"{emoji} {trade['type']} {trade['crypto']} {trade['quantity']:.4f} @ ${trade['price']:,.2f}{profit_text}")
 
 # ============================================
 # EN-TÊTE
@@ -661,5 +660,4 @@ st.markdown(f"""
     | ⚠️ Ceci n'est pas un conseil financier
 </div>
 """, unsafe_allow_html=True)
-"Ajout du compte de trading démo"
-"Fix: dictionnaire current_prices"
+"Fix: déplacement compte démo après chargement"
