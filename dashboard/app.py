@@ -224,7 +224,7 @@ with st.sidebar:
     st.markdown("<h3 style='color: #00D2FF;'>💰 Compte Démo</h3>", unsafe_allow_html=True)
     
     # Prix actuels pour le portefeuille
-    current_prices = {crypto_short: current_price}
+    current_prices = {crypto_short: current_price}   # ← ACCOLADES {}
     
     # Résumé du compte
     summary = paper_trader.get_summary(current_prices)
@@ -662,3 +662,4 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 "Ajout du compte de trading démo"
+"Fix: dictionnaire current_prices"
