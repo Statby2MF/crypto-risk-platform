@@ -1,6 +1,7 @@
 """
 Collecte des données de prix depuis Binance et Yahoo Finance
 """
+from src.coincap_api import get_price_coincap, get_historical_coincap
 import requests
 import yfinance as yf
 from datetime import datetime
@@ -106,4 +107,4 @@ if __name__ == "__main__":
     for crypto, info in data.items():
         print(f"   {crypto}: ${info['price']:,.2f}")
 
-"Ajout get_historical_binance"
+"Intégration CoinCap comme source principale"
