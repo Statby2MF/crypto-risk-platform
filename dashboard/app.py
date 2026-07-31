@@ -286,25 +286,15 @@ CRYPTO_MAP = {
 # FONCTIONS DE COLLECTE AVEC COINCAP
 # ============================================
 
-# Importer CoinCap
-from src.coincap_api import get_price_coincap, get_historical_coincap
+
 
 def get_price_with_fallback(crypto_key):
-    """Récupère le prix avec fallback: CoinCap → Binance"""
+    """Récupère le prix depuis Binance uniquement"""
     crypto_info = CRYPTO_MAP.get(crypto_key)
     if not crypto_info:
         return None
     
-    # 1. CoinCap (prioritaire)
-    try:
-        from src.coincap_api import get_price_coincap
-        price = get_price_coincap(crypto_info["symbol"])
-        if price:
-            return price
-    except Exception as e:
-        print(f"⚠️ CoinCap error: {e}")
-    
-    # 2. Binance
+    # Binance (source principale)
     try:
         url = f"https://api.binance.com/api/v3/ticker/price?symbol={crypto_info['binance']}"
         response = requests.get(url, timeout=5)
@@ -313,24 +303,12 @@ def get_price_with_fallback(crypto_key):
     except Exception as e:
         print(f"⚠️ Binance error: {e}")
     
-    # 3. En dernier recours, données simulées ou erreur
-    print(f"❌ Impossible de récupérer le prix pour {crypto_key}")
     return None
 
 def get_historical_safe(crypto_info, period="3mo"):
-    """Récupère l'historique: CoinCap → Binance"""
+    """Récupère l'historique depuis Binance uniquement"""
     
-    # 1. CoinCap
-    try:
-        from src.coincap_api import get_historical_coincap
-        hist = get_historical_coincap(crypto_info["symbol"], period)
-        if hist and len(hist) > 20:
-            dates = pd.date_range(end=datetime.now(), periods=len(hist), freq='D')
-            return pd.DataFrame({'Close': hist}, index=dates)
-    except Exception as e:
-        print(f"⚠️ CoinCap historique error: {e}")
-    
-    # 2. Binance
+    # Binance
     try:
         from src.collector import get_historical_binance
         hist = get_historical_binance(crypto_info["binance"], limit=100)
@@ -340,7 +318,7 @@ def get_historical_safe(crypto_info, period="3mo"):
     except Exception as e:
         print(f"⚠️ Binance historique error: {e}")
     
-    # 3. Données simulées en dernier recours (avec avertissement)
+    # Données simulées en dernier recours
     print(f"⚠️ Données simulées pour {crypto_info['symbol']}")
     dates = pd.date_range(end=datetime.now(), periods=50, freq='D')
     base_price = 50000 if crypto_info["symbol"] == "BTC" else 3000
@@ -746,4 +724,4 @@ st.markdown(f"""
     🔍 Mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} · 📊 Données: Binance / CoinGecko · ⚠️ Pas un conseil financier
 </div>
 """, unsafe_allow_html=True)
-"Intégration CoinCap comme source principale"
+"Désactivation CoinCap, Binance comme source unique"
