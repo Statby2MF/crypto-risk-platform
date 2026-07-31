@@ -41,16 +41,9 @@ PERIOD_DAYS = {
     "5y": 1825
 }
 
-
 def get_price_coincap(crypto_symbol):
     """
     Récupère le prix actuel depuis CoinCap
-    
-    Args:
-        crypto_symbol: Symbole de la crypto (ex: "BTC")
-    
-    Returns:
-        float: Prix en USD, ou None si erreur
     """
     try:
         crypto_id = COINCAP_IDS.get(crypto_symbol.upper())
@@ -58,17 +51,25 @@ def get_price_coincap(crypto_symbol):
             logger.warning(f"⚠️ Symbole {crypto_symbol} non reconnu par CoinCap")
             return None
         
-        url = f"https://api.coincap.io/v2/assets/{crypto_id}"
-        response = requests.get(url, timeout=10)
+        # Essayer avec l'IP directe si le DNS échoue
+        urls = [
+            f"https://api.coincap.io/v2/assets/{crypto_id}",
+            f"https://104.26.11.101/v2/assets/{crypto_id}"  # IP de CoinCap
+        ]
         
-        if response.status_code == 200:
-            data = response.json()
-            price = float(data['data']['priceUsd'])
-            logger.info(f"✅ CoinCap: {crypto_symbol} = ${price:,.2f}")
-            return price
-        else:
-            logger.warning(f"⚠️ CoinCap erreur {response.status_code} pour {crypto_symbol}")
-            return None
+        for url in urls:
+            try:
+                response = requests.get(url, timeout=10, headers={"Host": "api.coincap.io"})
+                if response.status_code == 200:
+                    data = response.json()
+                    price = float(data['data']['priceUsd'])
+                    logger.info(f"✅ CoinCap: {crypto_symbol} = ${price:,.2f}")
+                    return price
+            except:
+                continue
+        
+        logger.warning(f"⚠️ CoinCap échec pour {crypto_symbol}")
+        return None
             
     except Exception as e:
         logger.error(f"❌ CoinCap error: {e}")
