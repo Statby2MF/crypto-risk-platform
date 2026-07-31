@@ -283,46 +283,35 @@ CRYPTO_MAP = {
 }
 
 # ============================================
-# FONCTIONS DE COLLECTE AVEC GESTION D'ERREUR
+# FONCTIONS DE COLLECTE AVEC COINCAP
 # ============================================
 
-def safe_request(url, timeout=10):
-    """Effectue une requête avec gestion d'erreur"""
-    try:
-        response = requests.get(url, timeout=timeout)
-        if response.status_code == 200:
-            return response.json()
-        return None
-    except:
-        return None
+# Importer CoinCap
+from src.coincap_api import get_price_coincap, get_historical_coincap
 
 def get_price_with_fallback(crypto_key):
-    """Récupère le prix avec fallback et gestion d'erreur"""
+    """Récupère le prix avec fallback: CoinCap → Binance → Yahoo"""
     crypto_info = CRYPTO_MAP.get(crypto_key)
     if not crypto_info:
         return None
     
-    # 1. Binance
+    # 1. CoinCap (prioritaire)
+    price = get_price_coincap(crypto_info["symbol"])
+    if price:
+        return price
+    
+    # 2. Binance
     try:
         url = f"https://api.binance.com/api/v3/ticker/price?symbol={crypto_info['binance']}"
-        data = safe_request(url)
-        if data and 'price' in data:
-            return float(data['price'])
-    except:
-        pass
-    
-    # 2. CoinGecko
-    try:
-        url = f"https://api.coingecko.com/api/v3/simple/price?ids={crypto_info['coingecko']}&vs_currencies=usd"
-        data = safe_request(url)
-        if data and crypto_info['coingecko'] in data:
-            return float(data[crypto_info['coingecko']]['usd'])
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            return float(response.json()['price'])
     except:
         pass
     
     # 3. Yahoo Finance
     try:
-        ticker = yf.Ticker(crypto_info['symbol'] + "-USD")
+        ticker = yf.Ticker(crypto_info["symbol"] + "-USD")
         data = ticker.history(period="1d")
         if not data.empty:
             return float(data['Close'].iloc[-1])
@@ -332,8 +321,18 @@ def get_price_with_fallback(crypto_key):
     return None
 
 def get_historical_safe(crypto_info, period="3mo"):
-    """Récupère l'historique avec gestion d'erreur"""
-    # Essayer Binance d'abord
+    """Récupère l'historique: CoinCap → Binance → Yahoo"""
+    
+    # 1. CoinCap (prioritaire)
+    try:
+        hist = get_historical_coincap(crypto_info["symbol"], period)
+        if hist and len(hist) > 20:
+            dates = pd.date_range(end=datetime.now(), periods=len(hist), freq='D')
+            return pd.DataFrame({'Close': hist}, index=dates)
+    except:
+        pass
+    
+    # 2. Binance
     try:
         hist = get_historical_binance(crypto_info["binance"], limit=100)
         if hist and len(hist) > 20:
@@ -342,7 +341,7 @@ def get_historical_safe(crypto_info, period="3mo"):
     except:
         pass
     
-    # Fallback Yahoo
+    # 3. Yahoo Finance
     try:
         ticker = yf.Ticker(crypto_info["symbol"] + "-USD")
         hist = ticker.history(period=period)
@@ -756,4 +755,4 @@ st.markdown(f"""
     🔍 Mise à jour: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')} · 📊 Données: Binance / CoinGecko · ⚠️ Pas un conseil financier
 </div>
 """, unsafe_allow_html=True)
-"Design amélioré + gestion d'erreur"
+"Intégration CoinCap comme source principale"
