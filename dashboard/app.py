@@ -290,15 +290,19 @@ CRYPTO_MAP = {
 from src.coincap_api import get_price_coincap, get_historical_coincap
 
 def get_price_with_fallback(crypto_key):
-    """Récupère le prix avec fallback: CoinCap → Binance → Yahoo"""
+    """Récupère le prix avec fallback: CoinCap → Binance"""
     crypto_info = CRYPTO_MAP.get(crypto_key)
     if not crypto_info:
         return None
     
     # 1. CoinCap (prioritaire)
-    price = get_price_coincap(crypto_info["symbol"])
-    if price:
-        return price
+    try:
+        from src.coincap_api import get_price_coincap
+        price = get_price_coincap(crypto_info["symbol"])
+        if price:
+            return price
+    except Exception as e:
+        print(f"⚠️ CoinCap error: {e}")
     
     # 2. Binance
     try:
@@ -306,51 +310,38 @@ def get_price_with_fallback(crypto_key):
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             return float(response.json()['price'])
-    except:
-        pass
+    except Exception as e:
+        print(f"⚠️ Binance error: {e}")
     
-    # 3. Yahoo Finance
-    try:
-        ticker = yf.Ticker(crypto_info["symbol"] + "-USD")
-        data = ticker.history(period="1d")
-        if not data.empty:
-            return float(data['Close'].iloc[-1])
-    except:
-        pass
-    
+    # 3. En dernier recours, données simulées ou erreur
+    print(f"❌ Impossible de récupérer le prix pour {crypto_key}")
     return None
 
 def get_historical_safe(crypto_info, period="3mo"):
-    """Récupère l'historique: CoinCap → Binance → Yahoo"""
+    """Récupère l'historique: CoinCap → Binance"""
     
-    # 1. CoinCap (prioritaire)
+    # 1. CoinCap
     try:
+        from src.coincap_api import get_historical_coincap
         hist = get_historical_coincap(crypto_info["symbol"], period)
         if hist and len(hist) > 20:
             dates = pd.date_range(end=datetime.now(), periods=len(hist), freq='D')
             return pd.DataFrame({'Close': hist}, index=dates)
-    except:
-        pass
+    except Exception as e:
+        print(f"⚠️ CoinCap historique error: {e}")
     
     # 2. Binance
     try:
+        from src.collector import get_historical_binance
         hist = get_historical_binance(crypto_info["binance"], limit=100)
         if hist and len(hist) > 20:
             dates = pd.date_range(end=datetime.now(), periods=len(hist), freq='D')
             return pd.DataFrame({'Close': hist}, index=dates)
-    except:
-        pass
+    except Exception as e:
+        print(f"⚠️ Binance historique error: {e}")
     
-    # 3. Yahoo Finance
-    try:
-        ticker = yf.Ticker(crypto_info["symbol"] + "-USD")
-        hist = ticker.history(period=period)
-        if not hist.empty:
-            return hist
-    except:
-        pass
-    
-    # Données simulées en dernier recours
+    # 3. Données simulées en dernier recours (avec avertissement)
+    print(f"⚠️ Données simulées pour {crypto_info['symbol']}")
     dates = pd.date_range(end=datetime.now(), periods=50, freq='D')
     base_price = 50000 if crypto_info["symbol"] == "BTC" else 3000
     prices = [base_price * (1 + np.random.randn() * 0.02) for _ in range(50)]
